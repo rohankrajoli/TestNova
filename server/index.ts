@@ -375,14 +375,17 @@ app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
   res.status(status).json({ message });
 });
 
-const port = Number(process.env.PORT ?? 5000);
-initializeDatabase()
-  .then(() => {
-    app.listen(port, () => {
-      console.log(`API running on http://localhost:${port}`);
-    });
-  })
-  .catch((error) => {
-    console.error("Failed to initialize database:", error);
-    process.exit(1);
+// Initialize database
+initializeDatabase().catch((error) => {
+  console.error("Failed to initialize database:", error);
+});
+
+// Only listen if not running in Vercel or similar serverless environment
+if (process.env.NODE_ENV !== "production" || !process.env.VERCEL) {
+  const port = Number(process.env.PORT ?? 5000);
+  app.listen(port, () => {
+    console.log(`API running on http://localhost:${port}`);
   });
+}
+
+export default app;

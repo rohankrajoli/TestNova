@@ -95,6 +95,16 @@ app.get("/api/health", (_req, res) => {
   res.json({ status: "ok", supabase: !!supabase });
 });
 
+app.get("/api/debug-env", (_req, res) => {
+  res.json({ 
+    keys: Object.keys(process.env).filter(k => !k.includes("KEY") && !k.includes("SECRET")),
+    hasUrl: !!process.env.SUPABASE_URL,
+    hasKey: !!(process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY),
+    nodeEnv: process.env.NODE_ENV,
+    vercel: process.env.VERCEL
+  });
+});
+
 app.get("/api/quizzes", async (_req, res) => {
   const { data, error } = await getSupabase().from("quizzes").select("*").order("created_at", { ascending: false });
   if (error) throw error;

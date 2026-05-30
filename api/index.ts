@@ -48,11 +48,20 @@ const supabaseKey =
   process.env.SUPABASE_ANON_KEY ??
   process.env.VITE_SUPABASE_ANON_KEY;
 
-const supabase = (supabaseUrl && supabaseKey) 
-  ? createClient(supabaseUrl, supabaseKey, {
+// Create client lazily to avoid initialization issues during build or cold starts
+let supabaseClient: ReturnType<typeof createClient> | null = null;
+
+const getSupabase = () => {
+  if (!supabaseClient) {
+    if (!supabaseUrl || !supabaseKey) {
+      throw new Error("Supabase credentials missing. Set SUPABASE_URL and SUPABASE_ANON_KEY in Vercel.");
+    }
+    supabaseClient = createClient(supabaseUrl, supabaseKey, {
       auth: { persistSession: false, autoRefreshToken: false }
-    })
-  : null;
+    });
+  }
+  return supabaseClient;
+};
 
 // --- SERVER LOGIC (from server/index.ts) ---
 type QuizRow = {
@@ -135,15 +144,8 @@ function requireSingle<T>(data: T | null, error: { message: string } | null, not
   return data;
 }
 
-const getSupabase = () => {
-  if (!supabase) {
-    throw new Error("Supabase client not initialized. Check your environment variables (SUPABASE_URL, SUPABASE_ANON_KEY).");
-  }
-  return supabase;
-};
-
 app.get("/api/health", (_req, res) => {
-  res.json({ status: "ok", supabase: !!supabase });
+  res.json({ status: "ok", supabaseConfigured: !!(supabaseUrl && supabaseKey) });
 });
 
 app.get("/api/debug-env", (_req, res) => {

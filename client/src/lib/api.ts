@@ -1,4 +1,6 @@
-export const API_URL = import.meta.env.VITE_API_URL ?? (import.meta.env.PROD ? "" : "http://localhost:5000");
+// In production, we use relative paths so Vercel handles the routing.
+// In development, we default to localhost:5000.
+export const API_URL = import.meta.env.PROD ? "" : "http://localhost:5000";
 
 export type Role = "admin" | "student";
 

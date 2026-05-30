@@ -83,6 +83,26 @@ function requireSingle<T>(data: T | null, error: { message: string } | null, not
   return data;
 }
 
+// Initialize database on the first request if not already done
+let isDbInitialized = false;
+app.use(async (_req, res, next) => {
+  if (!isDbInitialized) {
+    try {
+      await initializeDatabase();
+      isDbInitialized = true;
+      next();
+    } catch (error) {
+      console.error("Database initialization failed:", error);
+      res.status(500).json({ 
+        message: "Database initialization failed. Ensure SUPABASE_URL and API keys are set in Vercel environment variables.",
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
+  } else {
+    next();
+  }
+});
+
 app.get("/api/quizzes", async (_req, res) => {
   const { data, error } = await supabase.from("quizzes").select("*").order("created_at", { ascending: false });
   if (error) throw error;
@@ -373,11 +393,6 @@ app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
         : "Internal server error";
 
   res.status(status).json({ message });
-});
-
-// Initialize database
-initializeDatabase().catch((error) => {
-  console.error("Failed to initialize database:", error);
 });
 
 // Only listen if not running in Vercel or similar serverless environment

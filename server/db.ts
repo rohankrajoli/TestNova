@@ -21,21 +21,16 @@ const supabaseKey =
   process.env.SUPABASE_ANON_KEY ??
   process.env.VITE_SUPABASE_ANON_KEY;
 
-if (!supabaseUrl) {
-  throw new Error("SUPABASE_URL is required. Set SUPABASE_URL or VITE_SUPABASE_URL.");
-}
-
-if (!supabaseKey) {
-  throw new Error(
-    "A Supabase API key is required. Set SUPABASE_SERVICE_ROLE_KEY, SUPABASE_ANON_KEY, or VITE_SUPABASE_ANON_KEY."
-  );
-}
-
-export const supabase = createClient(supabaseUrl, supabaseKey, {
-  auth: { persistSession: false, autoRefreshToken: false }
-});
+export const supabase = (supabaseUrl && supabaseKey) 
+  ? createClient(supabaseUrl, supabaseKey, {
+      auth: { persistSession: false, autoRefreshToken: false }
+    })
+  : null as any;
 
 export const initializeDatabase = async () => {
+  if (!supabaseUrl || !supabaseKey) {
+    throw new Error("SUPABASE_URL and a Supabase API key are required. Please check your environment variables.");
+  }
   const { error } = await supabase.from("quizzes").select("id", { head: true, count: "exact" });
   if (error) throw new Error(`Failed to connect to Supabase: ${error.message}`);
 };

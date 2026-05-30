@@ -1,6 +1,6 @@
 import express, { type NextFunction, type Request, type Response } from "express";
 import cors from "cors";
-import { initializeDatabase, supabase } from "./db";
+import { supabase } from "./db";
 import { attemptInputSchema, questionInputSchema, quizInputSchema } from "../shared/validation";
 
 type QuizRow = {
@@ -83,28 +83,20 @@ function requireSingle<T>(data: T | null, error: { message: string } | null, not
   return data;
 }
 
-// Initialize database on the first request if not already done
-let isDbInitialized = false;
-app.use(async (_req, res, next) => {
-  if (!isDbInitialized) {
-    try {
-      await initializeDatabase();
-      isDbInitialized = true;
-      next();
-    } catch (error) {
-      console.error("Database initialization failed:", error);
-      res.status(500).json({ 
-        message: "Database initialization failed. Ensure SUPABASE_URL and API keys are set in Vercel environment variables.",
-        error: error instanceof Error ? error.message : String(error)
-      });
-    }
-  } else {
-    next();
+// Helper to check supabase client
+const getSupabase = () => {
+  if (!supabase) {
+    throw new Error("Supabase client not initialized. Check your environment variables.");
   }
+  return supabase;
+};
+
+app.get("/api/health", (_req, res) => {
+  res.json({ status: "ok", supabase: !!supabase });
 });
 
 app.get("/api/quizzes", async (_req, res) => {
-  const { data, error } = await supabase.from("quizzes").select("*").order("created_at", { ascending: false });
+  const { data, error } = await getSupabase().from("quizzes").select("*").order("created_at", { ascending: false });
   if (error) throw error;
   res.json((data as QuizRow[]).map(mapQuiz));
 });
@@ -113,7 +105,7 @@ app.post("/api/quizzes", async (req, res) => {
   const parsed = quizInputSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json(parsed.error.flatten());
 
-  const { data, error } = await supabase
+  const { data, error } = await getSupabase()
     .from("quizzes")
     .insert({
       title: parsed.data.title,
@@ -131,10 +123,10 @@ app.post("/api/quizzes", async (req, res) => {
 
 app.get("/api/quizzes/:id", async (req, res) => {
   const id = Number(req.params.id);
-  const quizResult = await supabase.from("quizzes").select("*").eq("id", id).single();
+  const quizResult = await getSupabase().from("quizzes").select("*").eq("id", id).single();
   const quiz = requireSingle(quizResult.data as QuizRow | null, quizResult.error, "Quiz not found");
 
-  const questionResult = await supabase
+  const questionResult = await getSupabase()
     .from("questions")
     .select("*")
     .eq("quiz_id", id)
@@ -155,21 +147,21 @@ app.put("/api/quizzes/:id", async (req, res) => {
   if ("endAt" in req.body && (typeof req.body.endAt === "string" || req.body.endAt === null)) patch.end_at = req.body.endAt;
   if (typeof req.body.isPublished === "boolean") patch.is_published = req.body.isPublished;
 
-  const { data, error } = await supabase.from("quizzes").update(patch).eq("id", id).select().single();
+  const { data, error } = await getSupabase().from("quizzes").update(patch).eq("id", id).select().single();
   const updated = requireSingle(data as QuizRow | null, error, "Quiz not found");
   res.json(mapQuiz(updated));
 });
 
 app.delete("/api/quizzes/:id", async (req, res) => {
   const id = Number(req.params.id);
-  const { error } = await supabase.from("quizzes").delete().eq("id", id);
+  const { error } = await getSupabase().from("quizzes").delete().eq("id", id);
   if (error) throw error;
   res.status(204).send();
 });
 
 app.get("/api/quizzes/:id/questions", async (req, res) => {
   const id = Number(req.params.id);
-  const { data, error } = await supabase
+  const { data, error } = await getSupabase()
     .from("questions")
     .select("*")
     .eq("quiz_id", id)
@@ -187,7 +179,7 @@ app.post("/api/quizzes/:id/questions", async (req, res) => {
     return res.status(400).json({ message: "Correct index out of bounds" });
   }
 
-  const { data, error } = await supabase
+  const { data, error } = await getSupabase()
     .from("questions")
     .insert({
       quiz_id: quizId,
@@ -214,13 +206,13 @@ app.put("/api/questions/:id", async (req, res) => {
   if (typeof req.body.explanation === "string") patch.explanation = req.body.explanation;
   if (typeof req.body.orderIndex === "number") patch.order_index = req.body.orderIndex;
 
-  const { data, error } = await supabase.from("questions").update(patch).eq("id", id).select().single();
+  const { data, error } = await getSupabase().from("questions").update(patch).eq("id", id).select().single();
   const updated = requireSingle(data as QuestionRow | null, error, "Question not found");
   res.json(mapQuestion(updated));
 });
 
 app.delete("/api/questions/:id", async (req, res) => {
-  const { error } = await supabase.from("questions").delete().eq("id", Number(req.params.id));
+  const { error } = await getSupabase().from("questions").delete().eq("id", Number(req.params.id));
   if (error) throw error;
   res.status(204).send();
 });
@@ -229,7 +221,7 @@ app.get("/api/attempts", async (req, res) => {
   const quizId = req.query.quizId ? Number(req.query.quizId) : undefined;
   const userName = req.query.userName?.toString();
 
-  let query = supabase.from("attempts").select("*").order("completed_at", { ascending: false });
+  let query = getSupabase().from("attempts").select("*").order("completed_at", { ascending: false });
   if (quizId) query = query.eq("quiz_id", quizId);
   if (userName) query = query.eq("user_name", userName);
 
@@ -243,7 +235,7 @@ app.post("/api/attempts", async (req, res) => {
   if (!parsed.success) return res.status(400).json(parsed.error.flatten());
 
   const { quizId, answers, userName, timeTakenSeconds } = parsed.data;
-  const questionResult = await supabase
+  const questionResult = await getSupabase()
     .from("questions")
     .select("*")
     .eq("quiz_id", quizId)
@@ -270,7 +262,7 @@ app.post("/api/attempts", async (req, res) => {
   });
 
   const score = review.filter((r) => r.isCorrect).length;
-  const { data, error } = await supabase
+  const { data, error } = await getSupabase()
     .from("attempts")
     .insert({
       quiz_id: quizId,
@@ -289,10 +281,10 @@ app.post("/api/attempts", async (req, res) => {
 
 app.get("/api/attempts/:id", async (req, res) => {
   const id = Number(req.params.id);
-  const attemptResult = await supabase.from("attempts").select("*").eq("id", id).single();
+  const attemptResult = await getSupabase().from("attempts").select("*").eq("id", id).single();
   const attempt = requireSingle(attemptResult.data as AttemptRow | null, attemptResult.error, "Attempt not found");
 
-  const questionResult = await supabase.from("questions").select("*").eq("quiz_id", attempt.quiz_id);
+  const questionResult = await getSupabase().from("questions").select("*").eq("quiz_id", attempt.quiz_id);
   if (questionResult.error) throw questionResult.error;
 
   const review = (questionResult.data as QuestionRow[]).map(mapQuestion).map((q) => {
@@ -315,8 +307,8 @@ app.get("/api/attempts/:id", async (req, res) => {
 });
 
 app.get("/api/stats/overview", async (_req, res) => {
-  const quizzesResult = await supabase.from("quizzes").select("*");
-  const attemptsResult = await supabase.from("attempts").select("*").order("completed_at", { ascending: false });
+  const quizzesResult = await getSupabase().from("quizzes").select("*");
+  const attemptsResult = await getSupabase().from("attempts").select("*").order("completed_at", { ascending: false });
 
   if (quizzesResult.error) throw quizzesResult.error;
   if (attemptsResult.error) throw attemptsResult.error;
@@ -340,7 +332,7 @@ app.get("/api/stats/leaderboard", async (req, res) => {
   const quizId = req.query.quizId ? Number(req.query.quizId) : undefined;
   const limit = req.query.limit ? Number(req.query.limit) : 20;
 
-  let query = supabase
+  let query = getSupabase()
     .from("attempts")
     .select("*")
     .order("score", { ascending: false })
@@ -357,7 +349,7 @@ app.get("/api/stats/leaderboard", async (req, res) => {
 
 app.get("/api/stats/quiz/:id", async (req, res) => {
   const id = Number(req.params.id);
-  const { data, error } = await supabase.from("attempts").select("*").eq("quiz_id", id);
+  const { data, error } = await getSupabase().from("attempts").select("*").eq("quiz_id", id);
   if (error) throw error;
 
   const attempts = (data as AttemptRow[]).map(mapAttempt);

@@ -2,7 +2,10 @@
   "name": "quiz",
   "version": "1.0.0",
   "description": "Full-stack online quiz system with role-based access",
-  "main": "server/index.ts",
+  "main": "api/index.ts",
+  "engines": {
+    "node": ">=18.0.0"
+  },
   "scripts": {
     "dev:client": "vite",
     "dev:server": "tsx server/index.ts",

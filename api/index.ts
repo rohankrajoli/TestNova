@@ -3,6 +3,62 @@ import cors from "cors";
 import { createClient } from "@supabase/supabase-js";
 import { z } from "zod";
 
+// --- TYPES ---
+type QuizRow = {
+  id: number;
+  title: string;
+  description: string;
+  time_limit_seconds: number;
+  is_published: boolean;
+  start_at: string | null;
+  end_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+type QuestionRow = {
+  id: number;
+  quiz_id: number;
+  text: string;
+  options: string[];
+  correct_index: number;
+  explanation: string | null;
+  order_index: number;
+};
+
+type AttemptRow = {
+  id: number;
+  quiz_id: number;
+  user_name: string;
+  score: number;
+  total_questions: number;
+  time_taken_seconds: number;
+  answers: Record<string, number>;
+  completed_at: string;
+};
+
+interface Database {
+  public: {
+    Tables: {
+      quizzes: {
+        Row: QuizRow;
+        Insert: Omit<QuizRow, "id" | "created_at" | "updated_at" | "is_published"> & Partial<Pick<QuizRow, "is_published">>;
+        Update: Partial<QuizRow>;
+      };
+      questions: {
+        Row: QuestionRow;
+        Insert: Omit<QuestionRow, "id">;
+        Update: Partial<QuestionRow>;
+      };
+      attempts: {
+        Row: AttemptRow;
+        Insert: Omit<AttemptRow, "id" | "completed_at">;
+        Update: Partial<AttemptRow>;
+      };
+    };
+  };
+}
+
 // --- VALIDATION SCHEMAS (from shared/validation.ts) ---
 const quizInputSchema = z.object({
   title: z.string().min(2),
@@ -49,14 +105,14 @@ const supabaseKey =
   process.env.VITE_SUPABASE_ANON_KEY;
 
 // Create client lazily to avoid initialization issues during build or cold starts
-let supabaseClient: ReturnType<typeof createClient> | null = null;
+let supabaseClient: ReturnType<typeof createClient<Database>> | null = null;
 
 const getSupabase = () => {
   if (!supabaseClient) {
     if (!supabaseUrl || !supabaseKey) {
       throw new Error("Supabase credentials missing. Set SUPABASE_URL and SUPABASE_ANON_KEY in Vercel.");
     }
-    supabaseClient = createClient(supabaseUrl, supabaseKey, {
+    supabaseClient = createClient<Database>(supabaseUrl, supabaseKey, {
       auth: { persistSession: false, autoRefreshToken: false }
     });
   }
@@ -64,39 +120,6 @@ const getSupabase = () => {
 };
 
 // --- SERVER LOGIC (from server/index.ts) ---
-type QuizRow = {
-  id: number;
-  title: string;
-  description: string;
-  time_limit_seconds: number;
-  is_published: boolean;
-  start_at: string | null;
-  end_at: string | null;
-  created_at: string;
-  updated_at: string;
-};
-
-type QuestionRow = {
-  id: number;
-  quiz_id: number;
-  text: string;
-  options: string[];
-  correct_index: number;
-  explanation: string | null;
-  order_index: number;
-};
-
-type AttemptRow = {
-  id: number;
-  quiz_id: number;
-  user_name: string;
-  score: number;
-  total_questions: number;
-  time_taken_seconds: number;
-  answers: Record<string, number>;
-  completed_at: string;
-};
-
 const app = express();
 app.use(cors());
 app.use(express.json());
@@ -201,7 +224,7 @@ app.get("/api/quizzes/:id", async (req, res) => {
 
 app.put("/api/quizzes/:id", async (req, res) => {
   const id = Number(req.params.id);
-  const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
+  const patch: any = { updated_at: new Date().toISOString() };
 
   if (typeof req.body.title === "string") patch.title = req.body.title;
   if (typeof req.body.description === "string") patch.description = req.body.description;
@@ -261,7 +284,7 @@ app.post("/api/quizzes/:id/questions", async (req, res) => {
 
 app.put("/api/questions/:id", async (req, res) => {
   const id = Number(req.params.id);
-  const patch: Record<string, unknown> = {};
+  const patch: any = {};
 
   if (typeof req.body.text === "string") patch.text = req.body.text;
   if (Array.isArray(req.body.options)) patch.options = req.body.options;

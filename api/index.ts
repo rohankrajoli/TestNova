@@ -1,6 +1,6 @@
 import express, { type NextFunction, type Request, type Response } from "express";
 import cors from "cors";
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 
 // --- TYPES ---
@@ -36,28 +36,6 @@ type AttemptRow = {
   answers: Record<string, number>;
   completed_at: string;
 };
-
-interface Database {
-  public: {
-    Tables: {
-      quizzes: {
-        Row: QuizRow;
-        Insert: Omit<QuizRow, "id" | "created_at" | "updated_at" | "is_published"> & Partial<Pick<QuizRow, "is_published">>;
-        Update: Partial<QuizRow>;
-      };
-      questions: {
-        Row: QuestionRow;
-        Insert: Omit<QuestionRow, "id">;
-        Update: Partial<QuestionRow>;
-      };
-      attempts: {
-        Row: AttemptRow;
-        Insert: Omit<AttemptRow, "id" | "completed_at">;
-        Update: Partial<AttemptRow>;
-      };
-    };
-  };
-}
 
 // --- VALIDATION SCHEMAS (from shared/validation.ts) ---
 const quizInputSchema = z.object({
@@ -105,14 +83,14 @@ const supabaseKey =
   process.env.VITE_SUPABASE_ANON_KEY;
 
 // Create client lazily to avoid initialization issues during build or cold starts
-let supabaseClient: ReturnType<typeof createClient<Database>> | null = null;
+let supabaseClient: SupabaseClient<any> | null = null;
 
-const getSupabase = () => {
+const getSupabase = (): SupabaseClient<any> => {
   if (!supabaseClient) {
     if (!supabaseUrl || !supabaseKey) {
       throw new Error("Supabase credentials missing. Set SUPABASE_URL and SUPABASE_ANON_KEY in Vercel.");
     }
-    supabaseClient = createClient<Database>(supabaseUrl, supabaseKey, {
+    supabaseClient = createClient(supabaseUrl, supabaseKey, {
       auth: { persistSession: false, autoRefreshToken: false }
     });
   }

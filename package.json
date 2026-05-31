@@ -4,7 +4,7 @@
   "description": "Full-stack online quiz system with role-based access",
   "main": "api/index.ts",
   "engines": {
-    "node": "20.x"
+    "node": "22.x"
   },
   "scripts": {
     "dev:client": "vite",

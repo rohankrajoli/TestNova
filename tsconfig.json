@@ -9,10 +9,9 @@
       "@/*": ["client/src/*"],
       "@shared/*": ["shared/*"]
     },
-    "ignoreDeprecations": "6.0",
     "strict": false,
     "jsx": "react-jsx",
     "skipLibCheck": true
   },
-  "include": ["client/src", "server", "shared", "vite.config.ts"]
+  "include": ["client/src", "api", "shared", "vite.config.ts"]
 }

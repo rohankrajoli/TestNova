@@ -91,8 +91,7 @@ const getSupabase = (): SupabaseClient<any> => {
       throw new Error("Supabase credentials missing. Set SUPABASE_URL and SUPABASE_ANON_KEY in Vercel.");
     }
     supabaseClient = createClient(supabaseUrl, supabaseKey, {
-      auth: { persistSession: false, autoRefreshToken: false },
-      realtime: { enabled: false }
+      auth: { persistSession: false, autoRefreshToken: false }
     });
   }
   return supabaseClient;
